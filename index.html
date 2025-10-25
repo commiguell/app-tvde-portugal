@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor TVDE Portugal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'brand': {
+              'primary': '#00A878',
+              'secondary': '#D8F1A0',
+              'light': '#F3F9E3',
+              'dark': '#007352',
+            },
+            'background': '#111827',
+            'surface': '#1F2937',
+            'muted': '#4B5563',
+            'text-primary': '#F9FAFB',
+            'text-secondary': '#D1D5DB',
+            'income': '#22c55e',
+            'expense': '#ef4444',
+          }
+        }
+      }
+    }
+  </script>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "date-fns": "https://aistudiocdn.com/date-fns@^4.1.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<style>
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #report-content, #report-content * {
+      visibility: visible;
+    }
+    #report-content {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+    }
+    .no-print {
+      display: none;
+    }
+    body {
+      background-color: white !important;
+      color: black !important;
+    }
+    .print-text-black {
+        color: black !important;
+    }
+    .print-bg-transparent {
+        background-color: transparent !important;
+    }
+  }
+</style>
+</head>
+<body class="bg-background text-text-primary">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

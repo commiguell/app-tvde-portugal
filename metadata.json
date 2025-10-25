@@ -1,0 +1,5 @@
+{
+  "name": "Gestor TVDE Portugal",
+  "description": "Uma aplicação para ajudar profissionais de TVDE em Portugal a gerir as suas finanças, registando rendimentos de várias plataformas e despesas, para calcular o lucro semanal, mensal e anual.",
+  "requestFramePermissions": []
+}
