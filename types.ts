@@ -19,6 +19,7 @@ export interface Driver {
   entityType: EntityType;
   irsRate?: number; // Custom IRS rate for ENI
   ssRate?: number; // Custom Social Security rate for ENI
+  vehicleIds?: string[];
 }
 
 export interface Vehicle {
@@ -37,7 +38,10 @@ export type TransactionType = 'income' | 'expense';
 
 export type ExpenseCategory = 
   | 'combustivel' 
-  | 'manutencao' 
+  | 'manutencao'
+  | 'seguro_automovel'
+  | 'imposto_circulacao'
+  | 'licencas'
   | 'impostos' 
   | 'seguranca_social' 
   | 'outros'
@@ -47,6 +51,9 @@ export type ExpenseCategory =
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   combustivel: 'Combustível',
   manutencao: 'Manutenção/Oficina',
+  seguro_automovel: 'Seguro Automóvel',
+  imposto_circulacao: 'Imposto de Circulação (IUC)',
+  licencas: 'Licenças (e.g., TVDE)',
   impostos: 'Impostos (IVA, IRS)',
   seguranca_social: 'Segurança Social',
   irc: 'IRC',

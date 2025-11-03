@@ -75,6 +75,34 @@ const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, veh
 
     return { totalIncome, totalExpense, profit, expensesByCategory };
   }, [filteredTransactions]);
+  
+  const summaryByDriver = useMemo(() => {
+    const driverData: Record<string, { income: number; expense: number }> = {};
+
+    for (const t of filteredTransactions) {
+        if (!driverData[t.driverId]) {
+            driverData[t.driverId] = { income: 0, expense: 0 };
+        }
+        if (t.type === 'income') {
+            driverData[t.driverId].income += t.amount;
+        } else {
+            driverData[t.driverId].expense += t.amount;
+        }
+    }
+
+    return Object.entries(driverData)
+        .map(([driverId, data]) => {
+            const driver = drivers.find(d => d.id === driverId);
+            return {
+                driverId,
+                driverName: driver ? driver.name : 'Motorista Desconhecido',
+                ...data,
+                profit: data.income - data.expense,
+            };
+        })
+        .sort((a, b) => b.profit - a.profit);
+  }, [filteredTransactions, drivers]);
+
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(amount);
 
@@ -126,6 +154,37 @@ const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, veh
                     ))}
                  </ul>
             ) : <p className="text-text-secondary text-center">Sem despesas no período.</p>}
+        </div>
+
+        <h3 className="text-xl font-bold text-text-primary mb-3 print-text-black">Resumo por Motorista</h3>
+        <div className="bg-background p-4 rounded-lg mb-6 print-bg-transparent">
+            {summaryByDriver.length > 0 ? (
+                <ul className="space-y-4">
+                    {summaryByDriver.map(driverSummary => (
+                        <li key={driverSummary.driverId} className="p-3 bg-surface rounded-md print-bg-transparent">
+                            <h4 className="font-bold text-text-primary print-text-black">{driverSummary.driverName}</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-sm">
+                                <div>
+                                    <span className="text-text-secondary print-text-black">Rendimento: </span>
+                                    <span className="font-medium text-income">{formatCurrency(driverSummary.income)}</span>
+                                </div>
+                                <div>
+                                    <span className="text-text-secondary print-text-black">Despesa: </span>
+                                    <span className="font-medium text-expense">{formatCurrency(driverSummary.expense)}</span>
+                                </div>
+                                <div>
+                                    <span className="text-text-secondary print-text-black">Lucro: </span>
+                                    <span className={`font-medium ${driverSummary.profit >= 0 ? 'text-income' : 'text-expense'}`}>
+                                        {formatCurrency(driverSummary.profit)}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="text-text-secondary text-center">Sem dados para apresentar.</p>
+            )}
         </div>
 
         <h3 className="text-xl font-bold text-text-primary mb-3 print-text-black">Todas as Transações</h3>

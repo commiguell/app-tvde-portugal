@@ -50,7 +50,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({ transactions, platf
     <div className="bg-surface rounded-lg shadow-lg overflow-hidden">
       <ul className="divide-y divide-background">
         {transactions.map(t => (
-          <li key={t.id} className={`p-4 flex items-center justify-between hover:bg-background/50 transition-colors ${t.parentId ? 'opacity-70' : ''}`}>
+          <li key={t.id} className={`p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-background/50 transition-colors ${t.parentId ? 'opacity-70' : ''}`}>
             <div className="flex items-center gap-4">
               {t.type === 'income' ? <ArrowUpCircleIcon className="h-8 w-8 text-income flex-shrink-0" /> : <ArrowDownCircleIcon className="h-8 w-8 text-expense flex-shrink-0" />}
               <div className="flex flex-col">
@@ -64,7 +64,7 @@ const TransactionsList: React.FC<TransactionsListProps> = ({ transactions, platf
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1 md:gap-4">
+            <div className="flex items-center gap-1 md:gap-4 self-end sm:self-auto w-full sm:w-auto justify-end">
                <div className="text-right">
                 <span className={`font-bold ${t.type === 'income' ? 'text-income' : 'text-expense'}`}>
                   {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}

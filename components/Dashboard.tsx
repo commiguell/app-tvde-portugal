@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Platform, Transaction, Driver, Vehicle } from '../types';
+import { Platform, Transaction, Driver, Vehicle, ExpenseCategory, EXPENSE_CATEGORY_LABELS } from '../types';
 import SummaryCard from './SummaryCard';
 import TransactionsList from './TransactionsList';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, format } from 'date-fns';
+import ExpenseChart from './ExpenseChart';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, format, startOfQuarter, endOfQuarter, subMonths } from 'date-fns';
 
 interface PainelGeralProps {
   transactions: Transaction[];
@@ -47,54 +48,107 @@ const PainelGeral: React.FC<PainelGeralProps> = ({ transactions, platforms, driv
     }, { totalIncome: 0, totalExpenses: 0 });
   }, [transactionsForSummary]);
 
-  const calculateProfit = (txs: Transaction[]) => {
+  const calculateSummary = (txs: Transaction[]) => {
     return txs.reduce((acc, t) => {
-      if (t.type === 'income') return acc + t.amount;
-      return acc - t.amount;
-    }, 0);
+      if (t.type === 'income') {
+        acc.income += t.amount;
+      } else {
+        acc.expense += t.amount;
+      }
+      return acc;
+    }, { income: 0, expense: 0 });
   };
 
   const now = new Date();
 
-  const { weeklyProfit, weeklyPeriodLabel } = useMemo(() => {
+  const weeklySummary = useMemo(() => {
     const start = startOfWeek(now, { weekStartsOn: 1 });
     const end = endOfWeek(now, { weekStartsOn: 1 });
-    const weeklyTransactions = transactionsForSummary.filter(t => {
+    const txs = transactionsForSummary.filter(t => {
       const txDate = parseISO(t.date);
       return txDate >= start && txDate <= end;
     });
     return {
-      weeklyProfit: calculateProfit(weeklyTransactions),
-      weeklyPeriodLabel: `${format(start, 'dd/MM')} - ${format(end, 'dd/MM/yy')}`
+      ...calculateSummary(txs),
+      periodLabel: `${format(start, 'dd/MM')} - ${format(end, 'dd/MM/yy')}`
     };
   }, [transactionsForSummary]);
 
-  const { monthlyProfit, monthlyPeriodLabel } = useMemo(() => {
+  const monthlySummary = useMemo(() => {
     const start = startOfMonth(now);
     const end = endOfMonth(now);
-    const monthlyTransactions = transactionsForSummary.filter(t => {
+    const txs = transactionsForSummary.filter(t => {
         const txDate = parseISO(t.date);
         return txDate >= start && txDate <= end;
     });
     const monthName = now.toLocaleString('pt-PT', { month: 'long' });
     return {
-      monthlyProfit: calculateProfit(monthlyTransactions),
-      monthlyPeriodLabel: monthName.charAt(0).toUpperCase() + monthName.slice(1)
+      ...calculateSummary(txs),
+      periodLabel: monthName.charAt(0).toUpperCase() + monthName.slice(1)
     };
   }, [transactionsForSummary]);
 
-  const { yearlyProfit, yearlyPeriodLabel } = useMemo(() => {
-    const start = startOfYear(now);
-    const end = endOfYear(now);
-    const yearlyTransactions = transactionsForSummary.filter(t => {
+  const quarterlySummary = useMemo(() => {
+    const start = startOfQuarter(now);
+    const end = endOfQuarter(now);
+    const txs = transactionsForSummary.filter(t => {
         const txDate = parseISO(t.date);
         return txDate >= start && txDate <= end;
     });
     return {
-      yearlyProfit: calculateProfit(yearlyTransactions),
-      yearlyPeriodLabel: now.getFullYear().toString()
+        ...calculateSummary(txs),
+        periodLabel: `${format(start, 'dd/MM/yy')} - ${format(end, 'dd/MM/yy')}`
     };
   }, [transactionsForSummary]);
+
+  const semesterSummary = useMemo(() => {
+    const start = subMonths(now, 6);
+    const end = now;
+    const txs = transactionsForSummary.filter(t => {
+        const txDate = parseISO(t.date);
+        return txDate >= start && txDate <= end;
+    });
+    return {
+        ...calculateSummary(txs),
+        periodLabel: `Últimos 6 Meses`
+    };
+  }, [transactionsForSummary]);
+
+  const yearlySummary = useMemo(() => {
+    const start = startOfYear(now);
+    const end = endOfYear(now);
+    const txs = transactionsForSummary.filter(t => {
+        const txDate = parseISO(t.date);
+        return txDate >= start && txDate <= end;
+    });
+    return {
+      ...calculateSummary(txs),
+      periodLabel: now.getFullYear().toString()
+    };
+  }, [transactionsForSummary]);
+  
+  const expensesByCategory = useMemo(() => {
+    const categoryTotals = transactionsForList
+      .filter(t => t.type === 'expense' && t.category)
+      .reduce((acc, t) => {
+        const category = t.category as ExpenseCategory;
+        if (!acc[category]) {
+          acc[category] = 0;
+        }
+        acc[category] += t.amount;
+        return acc;
+      }, {} as Record<ExpenseCategory, number>);
+
+    return Object.entries(categoryTotals)
+      .map(([category, amount]) => ({
+        category: category as ExpenseCategory,
+        label: EXPENSE_CATEGORY_LABELS[category as ExpenseCategory],
+        // FIX: The `amount` from Object.entries may not be inferred as a number,
+        // causing a type error in the sort function. Casting to number here resolves the issue.
+        amount: amount as number,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [transactionsForList]);
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(amount);
 
@@ -164,11 +218,17 @@ const PainelGeral: React.FC<PainelGeralProps> = ({ transactions, platforms, driv
 
       <div>
         <h2 className="text-2xl font-bold text-text-primary mb-4">Resumo Financeiro</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SummaryCard title="Lucro Esta Semana" amount={weeklyProfit} periodLabel={weeklyPeriodLabel}/>
-          <SummaryCard title="Lucro Este Mês" amount={monthlyProfit} periodLabel={monthlyPeriodLabel} />
-          <SummaryCard title="Lucro Este Ano" amount={yearlyProfit} periodLabel={yearlyPeriodLabel} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <SummaryCard title="Resultado Esta Semana" income={weeklySummary.income} expense={weeklySummary.expense} periodLabel={weeklySummary.periodLabel}/>
+          <SummaryCard title="Resultado Este Mês" income={monthlySummary.income} expense={monthlySummary.expense} periodLabel={monthlySummary.periodLabel} />
+          <SummaryCard title="Resultado Trimestre" income={quarterlySummary.income} expense={quarterlySummary.expense} periodLabel={quarterlySummary.periodLabel} />
+          <SummaryCard title="Resultado Semestre" income={semesterSummary.income} expense={semesterSummary.expense} periodLabel={semesterSummary.periodLabel} />
+          <SummaryCard title="Resultado Este Ano" income={yearlySummary.income} expense={yearlySummary.expense} periodLabel={yearlySummary.periodLabel} />
         </div>
+      </div>
+      <div>
+        <h2 className="text-2xl font-bold text-text-primary mb-4">Despesas por Categoria</h2>
+        <ExpenseChart data={expensesByCategory} />
       </div>
       <div>
         <h2 className="text-2xl font-bold text-text-primary mb-4">Transações</h2>

@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Driver, Region, REGION_LABELS, EntityType, ENTITY_TYPE_LABELS } from '../types';
-import { TrashIcon, PencilIcon } from './Icons';
+import { Driver, Region, REGION_LABELS, EntityType, ENTITY_TYPE_LABELS, Vehicle } from '../types';
+import { TrashIcon, PencilIcon, InformationCircleIcon } from './Icons';
 
 interface DriversManagerProps {
   drivers: Driver[];
+  vehicles: Vehicle[];
   addDriver: (driver: Omit<Driver, 'id'>) => void;
   updateDriver: (driver: Driver) => void;
   deleteDriver: (id:string) => void;
 }
 
-const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, updateDriver, deleteDriver }) => {
+const DriversManager: React.FC<DriversManagerProps> = ({ drivers, vehicles, addDriver, updateDriver, deleteDriver }) => {
   const [name, setName] = useState('');
   const [region, setRegion] = useState<Region>('continental');
   const [entityType, setEntityType] = useState<EntityType>('eni');
   const [irsRate, setIrsRate] = useState('20');
   const [ssRate, setSsRate] = useState('21.4');
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,6 +28,7 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
         setEntityType(driverToEdit.entityType);
         setIrsRate(String(driverToEdit.irsRate || '20'));
         setSsRate(String(driverToEdit.ssRate || '21.4'));
+        setSelectedVehicleIds(driverToEdit.vehicleIds || []);
       }
     } else {
       resetForm();
@@ -38,7 +41,14 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
     setEntityType('eni');
     setIrsRate('20');
     setSsRate('21.4');
+    setSelectedVehicleIds([]);
     setEditingId(null);
+  };
+
+  const handleVehicleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    // FIX: Explicitly type `option` as `HTMLOptionElement` to resolve a type inference issue where its properties were not accessible.
+    const options = Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value);
+    setSelectedVehicleIds(options);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -49,6 +59,7 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
       name, 
       region, 
       entityType,
+      vehicleIds: selectedVehicleIds,
       ...(entityType === 'eni' && { 
         irsRate: parseFloat(irsRate), 
         ssRate: parseFloat(ssRate) 
@@ -62,6 +73,18 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
     }
     resetForm();
   };
+  
+  const getVehicleNames = (vehicleIds?: string[]) => {
+    if (!vehicleIds || vehicleIds.length === 0) return 'Nenhuma viatura associada.';
+    return vehicleIds
+      .map(id => {
+          const vehicle = vehicles.find(v => v.id === id);
+          return vehicle ? `${vehicle.name} (${vehicle.licensePlate})` : null;
+      })
+      .filter(Boolean)
+      .join(', ');
+  };
+
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
@@ -128,20 +151,41 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
           )}
 
           <div>
-            <label htmlFor="driver-region" className="block text-sm font-medium text-text-secondary">Região de Operação</label>
+            <div className="flex items-center gap-1.5 mb-1">
+                <label htmlFor="driver-region" className="block text-sm font-medium text-text-secondary">Região de Operação</label>
+                <div title="A região de operação (Continental, Açores, Madeira) determina a taxa de IVA (6%, 4% ou 5%, respetivamente) que será automaticamente calculada e registada como despesa sobre os seus rendimentos.">
+                    <InformationCircleIcon className="h-4 w-4 text-muted cursor-help" />
+                </div>
+            </div>
             <select
               id="driver-region"
               value={region}
               onChange={(e) => setRegion(e.target.value as Region)}
               required
-              className="mt-1 block w-full bg-background border border-muted rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-primary focus:border-brand-primary"
+              className="block w-full bg-background border border-muted rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-primary focus:border-brand-primary"
             >
               {Object.entries(REGION_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
               ))}
             </select>
-            <p className="text-xs text-muted mt-1">A região afeta o cálculo automático da taxa de IVA.</p>
           </div>
+
+          <div>
+              <label htmlFor="vehicle-association" className="block text-sm font-medium text-text-secondary">Associar Viaturas</label>
+              <select
+                id="vehicle-association"
+                multiple
+                value={selectedVehicleIds}
+                onChange={handleVehicleSelect}
+                className="mt-1 block w-full bg-background border border-muted rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-primary focus:border-brand-primary h-24"
+              >
+                {vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.name} ({v.licensePlate})</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted mt-1">Selecione uma ou mais viaturas. Use Ctrl/Cmd para selecionar várias.</p>
+            </div>
+
           <div className="flex justify-end gap-3">
              {editingId && (
               <button type="button" onClick={resetForm} className="py-2 px-4 bg-muted text-text-primary rounded-md hover:bg-opacity-80 transition-colors">
@@ -167,6 +211,7 @@ const DriversManager: React.FC<DriversManagerProps> = ({ drivers, addDriver, upd
                    {d.entityType === 'eni' && (
                     <p className="text-xs text-muted mt-1">Taxas: IRS {d.irsRate || 0}% | Seg. Social {d.ssRate || 0}%</p>
                   )}
+                  <p className="text-xs text-muted mt-1">Viaturas: {getVehicleNames(d.vehicleIds)}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button 
