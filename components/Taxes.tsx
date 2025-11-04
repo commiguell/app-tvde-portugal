@@ -37,19 +37,20 @@ const Taxes: React.FC<TaxesProps> = ({ transactions, drivers, vehicles }) => {
 
   // Memoized tax summary calculation
   const taxSummary = useMemo(() => {
-    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
+    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense' && !t.parentId); // Only manual expenses
     
     const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
     
     const vatByCategory = expenseTransactions.reduce((acc, t) => {
       const driver = drivers.find(d => d.id === t.driverId);
-      // Default to continental rate if driver or region is not found
       const vatRate = driver ? EXPENSE_VAT_RATES[driver.region] : EXPENSE_VAT_RATES.continental;
 
       const category = t.category as ExpenseCategory;
-      // The transaction amount is gross (includes VAT)
-      // VAT part = Gross Amount - (Gross Amount / (1 + VAT Rate))
-      const vatAmount = t.amount - (t.amount / (1 + vatRate));
+
+      // Use manually entered VAT if available, otherwise estimate it
+      const vatAmount = t.vatAmount !== undefined
+        ? t.vatAmount
+        : t.amount - (t.amount / (1 + vatRate));
       
       if (!acc[category]) {
         acc[category] = { total: 0, vat: 0 };
@@ -61,9 +62,7 @@ const Taxes: React.FC<TaxesProps> = ({ transactions, drivers, vehicles }) => {
       return acc;
     }, {} as Record<ExpenseCategory, { total: number; vat: number }>);
 
-    // FIX: The type of `cat` was inferred as `unknown`. Explicitly typing it allows accessing the `vat` property.
-    // Fix for: Operator '+' cannot be applied to types 'unknown' and 'number'.
-    const totalVat = Object.values(vatByCategory).reduce((sum, cat: { total: number; vat: number }) => sum + cat.vat, 0);
+    const totalVat = Object.values(vatByCategory).reduce((sum, cat) => sum + (cat as { vat: number }).vat, 0);
 
     const vatPercentage = totalExpenses > 0 ? (totalVat / totalExpenses) * 100 : 0;
 
@@ -76,7 +75,7 @@ const Taxes: React.FC<TaxesProps> = ({ transactions, drivers, vehicles }) => {
   }, [filteredTransactions, drivers]);
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(amount);
-  const tooltipText = `Estimativa calculada com base na taxa de IVA da região do motorista (Cont: 23%, Madeira: 22%, Açores: 18%). Para valores exatos, consulte um contabilista.`;
+  const tooltipText = `Estimativa calculada com base na taxa de IVA da região do motorista (Cont: 23%, Madeira: 22%, Açores: 18%) ou no valor manual inserido na despesa.`;
 
   return (
     <div className="space-y-6">
@@ -134,20 +133,24 @@ const Taxes: React.FC<TaxesProps> = ({ transactions, drivers, vehicles }) => {
       <div className="flex items-start gap-3 bg-surface p-4 rounded-md">
           <InformationCircleIcon className="h-6 w-6 text-brand-secondary flex-shrink-0 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-text-primary">Cálculo do IVA</h4>
-            <p className="text-sm text-text-secondary">O valor do IVA (Imposto sobre o Valor Acrescentado) é uma <span className="font-bold">estimativa</span> calculada aplicando a taxa normal correspondente à região de operação do motorista (Continental: 23%, Madeira: 22%, Açores: 18%) sobre o valor total de cada despesa. Esta ferramenta assume que as despesas incluem IVA a esta taxa, o que pode não se aplicar a todos os casos (ex: seguros). Consulte sempre um contabilista para obter valores exatos.</p>
+            <h4 className="font-semibold text-text-primary">Cálculo do IVA Dedutível</h4>
+            <p className="text-sm text-text-secondary">Esta página analisa o IVA potencialmente dedutível das suas despesas. O cálculo é feito de duas formas:
+              <br/>1. <span className="font-bold">Valor Manual:</span> Se introduziu um valor de IVA ao registar a despesa, esse valor exato é usado.
+              <br/>2. <span className="font-bold">Estimativa:</span> Se não introduziu um valor, o IVA é estimado aplicando a taxa normal da região do motorista (Cont: 23%, Madeira: 22%, Açores: 18%) ao total da despesa.
+              <br/>Para valores exatos e confirmação da dedutibilidade, consulte sempre um contabilista.
+            </p>
           </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface p-6 rounded-lg shadow-lg">
-            <h3 className="text-md font-medium text-text-secondary">Total de Despesas</h3>
+            <h3 className="text-md font-medium text-text-secondary">Total de Despesas (Manuais)</h3>
             <p className="text-3xl font-bold mt-1 text-expense">{formatCurrency(taxSummary.totalExpenses)}</p>
         </div>
         <div className="bg-surface p-6 rounded-lg shadow-lg">
             <div className="flex items-center gap-1.5" title={tooltipText}>
-              <h3 className="text-md font-medium text-text-secondary">Total de IVA Estimado</h3>
+              <h3 className="text-md font-medium text-text-secondary">Total de IVA Dedutível</h3>
               <InformationCircleIcon className="h-4 w-4 text-muted cursor-help" />
             </div>
             <p className="text-3xl font-bold mt-1 text-brand-secondary">{formatCurrency(taxSummary.totalVat)}</p>
@@ -164,9 +167,8 @@ const Taxes: React.FC<TaxesProps> = ({ transactions, drivers, vehicles }) => {
         {Object.keys(taxSummary.vatByCategory).length > 0 ? (
           <ul className="divide-y divide-background">
             {Object.entries(taxSummary.vatByCategory)
-              // FIX: The types for `a` and `b` were inferred as `unknown`. Explicitly typing them allows accessing the `vat` property for sorting.
+              // FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
               .sort(([, a]: [string, { total: number; vat: number }], [, b]: [string, { total: number; vat: number }]) => b.vat - a.vat) // Sort by highest VAT amount
-              // FIX: The type for `data` was inferred as `unknown`. Explicitly typing it allows accessing its properties.
               .map(([category, data]: [string, { total: number; vat: number }]) => (
               <li key={category} className="py-3 grid grid-cols-3 gap-4 items-center">
                 <span className="font-semibold text-text-primary col-span-1">{EXPENSE_CATEGORY_LABELS[category as ExpenseCategory]}</span>

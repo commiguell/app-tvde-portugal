@@ -21,6 +21,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
   const [category, setCategory] = useState<ExpenseCategory>('combustivel');
   const [driverId, setDriverId] = useState<string>('');
   const [vehicleId, setVehicleId] = useState<string>('');
+  const [vatAmount, setVatAmount] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   
   const isEditing = !!transactionToEdit;
@@ -48,6 +49,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
             setCategory(transactionToEdit.category || 'combustivel');
             setDriverId(transactionToEdit.driverId);
             setVehicleId(transactionToEdit.vehicleId);
+            setVatAmount(transactionToEdit.vatAmount ? String(transactionToEdit.vatAmount) : '');
         } else {
             resetForm();
         }
@@ -120,6 +122,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
       vehicleId,
       ...(type === 'income' && { platformId }),
       ...(type === 'expense' && { category }),
+      ...(type === 'expense' && vatAmount && { vatAmount: parseFloat(vatAmount) }),
     };
 
     onSaveTransaction(newTransactionData, transactionToEdit?.id);
@@ -136,11 +139,12 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
     // Let the useEffect handle setting the vehicleId based on the first driver
     setVehicleId(''); 
     setCategory('combustivel');
+    setVatAmount('');
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={handleClose}>
-      <div className="bg-surface rounded-lg shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface rounded-lg shadow-xl p-6 w-full max-w-md overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
         {isSaved ? (
           <div className="flex flex-col items-center justify-center text-center py-8">
             <CheckCircleIcon className="h-16 w-16 text-income mx-auto mb-4" />
@@ -168,9 +172,17 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClo
               </div>
 
               <div>
-                <label htmlFor="amount" className="block text-sm font-medium text-text-secondary">Valor</label>
+                <label htmlFor="amount" className="block text-sm font-medium text-text-secondary">Valor Total {type === 'expense' ? '(c/ IVA)' : ''}</label>
                 <input type="number" id="amount" value={amount} onChange={e => setAmount(e.target.value)} required step="0.01" className="mt-1 block w-full bg-background border border-muted rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
               </div>
+
+               {type === 'expense' && (
+                <div>
+                  <label htmlFor="vatAmount" className="block text-sm font-medium text-text-secondary">Valor do IVA (Opcional)</label>
+                  <input type="number" id="vatAmount" value={vatAmount} onChange={e => setVatAmount(e.target.value)} step="0.01" min="0" className="mt-1 block w-full bg-background border border-muted rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-brand-primary focus:border-brand-primary" />
+                   <p className="text-xs text-muted mt-1">Se deixado em branco, o IVA será estimado com base na região do motorista.</p>
+                </div>
+              )}
 
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-text-secondary">Descrição</label>

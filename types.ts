@@ -70,6 +70,7 @@ export interface Transaction {
   description: string;
   platformId?: string; // for income
   category?: ExpenseCategory; // for expense
+  vatAmount?: number; // for manual VAT input on expenses
   driverId: string;
   vehicleId: string;
 }

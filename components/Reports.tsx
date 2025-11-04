@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Platform, Transaction, Driver, Vehicle, EXPENSE_CATEGORY_LABELS, ExpenseCategory } from '../types';
+import { Platform, Transaction, Driver, Vehicle, EXPENSE_CATEGORY_LABELS, ExpenseCategory, Region } from '../types';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, parseISO } from 'date-fns';
-import { PrinterIcon } from './Icons';
+import { PrinterIcon, InformationCircleIcon } from './Icons';
+import IncomeExpenseChart from './IncomeExpenseChart';
 
 interface ReportsProps {
   transactions: Transaction[];
@@ -11,6 +12,12 @@ interface ReportsProps {
 }
 
 type Period = 'week' | 'month' | 'quarter' | 'semester' | 'year';
+
+const EXPENSE_VAT_RATES: Record<Region, number> = {
+  continental: 0.23,
+  acores: 0.18,
+  madeira: 0.22,
+};
 
 const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, vehicles }) => {
   const [period, setPeriod] = useState<Period>('month');
@@ -103,6 +110,47 @@ const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, veh
         .sort((a, b) => b.profit - a.profit);
   }, [filteredTransactions, drivers]);
 
+  const taxSummary = useMemo(() => {
+    let ivaLiquidado = 0;
+    let irsEstimado = 0;
+    let ssEstimada = 0;
+    let ivaDedutivel = 0;
+
+    for (const t of filteredTransactions) {
+        if (t.type === 'expense') {
+            // Auto-generated taxes on income
+            if (t.parentId) {
+                if (t.category === 'impostos') {
+                    if (t.description.includes('IVA')) {
+                        ivaLiquidado += t.amount;
+                    } else if (t.description.includes('IRS')) {
+                        irsEstimado += t.amount;
+                    }
+                } else if (t.category === 'seguranca_social') {
+                    ssEstimada += t.amount;
+                }
+            } else { // Manual expenses for deductible VAT
+                const driver = drivers.find(d => d.id === t.driverId);
+                if (driver) {
+                    if (t.vatAmount !== undefined) {
+                        // Use manually entered VAT amount if available
+                        ivaDedutivel += t.vatAmount;
+                    } else {
+                        // Otherwise, estimate it based on region
+                        const vatRate = EXPENSE_VAT_RATES[driver.region];
+                        const deductibleVatOnExpense = t.amount - (t.amount / (1 + vatRate));
+                        ivaDedutivel += deductibleVatOnExpense;
+                    }
+                }
+            }
+        }
+    }
+    
+    const ivaAPagar = ivaLiquidado - ivaDedutivel;
+
+    return { ivaLiquidado, ivaDedutivel, ivaAPagar, irsEstimado, ssEstimada };
+  }, [filteredTransactions, drivers]);
+
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(amount);
 
@@ -141,7 +189,10 @@ const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, veh
             <div className="bg-background p-4 rounded-lg print-bg-transparent"><h3 className="text-text-secondary print-text-black">Lucro Líquido</h3><p className={`text-2xl font-bold ${summary.profit >= 0 ? 'text-income' : 'text-expense'}`}>{formatCurrency(summary.profit)}</p></div>
         </div>
 
-        <h3 className="text-xl font-bold text-text-primary mb-3 print-text-black">Despesas por Categoria</h3>
+        <h3 className="text-xl font-bold text-text-primary mt-6 mb-3 print-text-black">Comparativo de Rendimento vs. Despesa</h3>
+        <IncomeExpenseChart income={summary.totalIncome} expense={summary.totalExpense} />
+
+        <h3 className="text-xl font-bold text-text-primary mt-6 mb-3 print-text-black">Despesas por Categoria</h3>
         <div className="bg-background p-4 rounded-lg mb-6 print-bg-transparent">
             {Object.keys(summary.expensesByCategory).length > 0 ? (
                  <ul className="space-y-2">
@@ -185,6 +236,42 @@ const Reports: React.FC<ReportsProps> = ({ transactions, platforms, drivers, veh
             ) : (
                 <p className="text-text-secondary text-center">Sem dados para apresentar.</p>
             )}
+        </div>
+
+        <h3 className="text-xl font-bold text-text-primary mb-3 print-text-black">Resumo de Impostos Estimados</h3>
+        <div className="bg-background p-4 rounded-lg mb-6 print-bg-transparent">
+            <div className="flex items-start gap-3 bg-surface/50 p-3 rounded-md mb-4 print-bg-transparent">
+                <InformationCircleIcon className="h-5 w-5 text-brand-secondary flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-text-secondary print-text-black">
+                    Estes valores são estimativas baseadas nos seus lançamentos e configurações de motorista. Para maior precisão, pode introduzir o valor de IVA exato em cada despesa. Para valores finais, consulte um contabilista.
+                </p>
+            </div>
+            <ul className="space-y-3">
+                <li className="flex justify-between items-center text-text-secondary print-text-black">
+                    <span>(+) IVA Liquidado (s/ Rendimentos)</span>
+                    <span className="font-medium text-income">{formatCurrency(taxSummary.ivaLiquidado)}</span>
+                </li>
+                 <li className="flex justify-between items-center text-text-secondary print-text-black">
+                    <span>(-) IVA Dedutível (s/ Despesas)</span>
+                    <span className="font-medium text-expense">{formatCurrency(taxSummary.ivaDedutivel)}</span>
+                </li>
+                 <li className="flex justify-between items-center text-text-primary print-text-black border-t border-muted pt-3 mt-2">
+                    <span className="font-bold">(=) Total de IVA a Pagar</span>
+                    <span className={`font-bold text-lg ${taxSummary.ivaAPagar >= 0 ? 'text-brand-secondary' : 'text-green-400'}`}>
+                        {formatCurrency(taxSummary.ivaAPagar)}
+                    </span>
+                </li>
+            </ul>
+            <ul className="space-y-2 mt-4 border-t border-muted pt-4">
+                <li className="flex justify-between items-center text-text-secondary print-text-black">
+                    <span>IRS Estimado (ENI)</span>
+                    <span className="font-medium">{formatCurrency(taxSummary.irsEstimado)}</span>
+                </li>
+                 <li className="flex justify-between items-center text-text-secondary print-text-black">
+                    <span>Segurança Social Estimada (ENI)</span>
+                    <span className="font-medium">{formatCurrency(taxSummary.ssEstimada)}</span>
+                </li>
+            </ul>
         </div>
 
         <h3 className="text-xl font-bold text-text-primary mb-3 print-text-black">Todas as Transações</h3>
